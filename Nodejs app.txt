@@ -1,0 +1,80 @@
+const { google } = require('googleapis');
+const gmail = google.gmail('v1');
+
+
+const clientId = 'YOUR_CLIENT_ID';
+const clientSecret = 'YOUR_CLIENT_SECRET';
+const redirectUri = 'YOUR_REDIRECT_URI';
+
+const gmailId = 'your_email@gmail.com';
+const labelName = 'YourLabelName';
+
+
+const OAuth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+
+
+const authorize = async () => {
+  const authUrl = OAuth2Client.generateAuthUrl({
+    access_type: 'offline',
+    scope: ['https://www.googleapis.com/auth/gmail.readonly', 'https://www.googleapis.com/auth/gmail.modify'],
+  });
+
+  
+  console.log('Authorize this app by visiting this URL:', authUrl);
+  const code = 'YOUR_AUTHORIZATION_CODE'; // Replace with the code you obtain
+
+  const token = await OAuth2Client.getToken(code);
+  OAuth2Client.setCredentials(token);
+};
+
+
+const sendReply = (messageId) => {
+  const rawMessage = 'Your reply message here';
+
+  const replyMessage = {
+    raw: Buffer.from(rawMessage).toString('base64'),
+  };
+
+  gmail.users.messages.send({
+    userId: gmailId,
+    resource: replyMessage,
+    auth: OAuth2Client,
+  });
+};
+
+
+const checkAndSendReplies = async () => {
+  const response = await gmail.users.messages.list({
+    userId: gmailId,
+    auth: OAuth2Client,
+  });
+
+  const messages = response.data.messages;
+  if (messages) {
+    for (const message of messages) {
+      const messageId = message.id;
+
+      sendReply(messageId);
+
+     
+      gmail.users.messages.modify({
+        userId: gmailId,
+        id: messageId,
+        resource: { addLabelIds: [labelName] },
+        auth: OAuth2Client,
+      });
+    }
+  }
+};
+
+
+const repeatProcess = async () => {
+  await checkAndSendReplies();
+  const randomInterval = Math.floor(Math.random() * (120 - 45 + 1) + 45) * 1000;
+  setTimeout(repeatProcess, randomInterval);
+};
+
+
+authorize()
+  .then(() => repeatProcess())
+  .catch((err) => console.error('Error authorizing:', err));
